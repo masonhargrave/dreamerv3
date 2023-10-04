@@ -104,6 +104,7 @@ class KuramotoEnv(embodied.Env):
         self.theta = np.random.uniform(0, 2 * np.pi, self.N)  # Reset phases
         self.initialize_coupling_matrix()
         self._done = False  # Reset done flag
+        self.current_step = 0
 
         self.phase_history = []  # Reset phase history
         # Optionally, you might want to run a few simulation steps to get an initial correllogram
