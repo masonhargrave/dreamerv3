@@ -95,7 +95,8 @@ class KuramotoEnv(embodied.Env):
         reward = -frobenius_norm
         
         # Check termination condition
-        self._done = frobenius_norm < self.threshold
+        if not self._done:
+            self._done = frobenius_norm < self.threshold
         
         return correllogram, reward, self._done, {}
 
