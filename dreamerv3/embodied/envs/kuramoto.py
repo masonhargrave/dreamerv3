@@ -23,7 +23,11 @@ class KuramotoEnv(embodied.Env):
         self.phase_history = []  # Initialize phase history
         self.max_steps = max_steps
         self.current_step = 0
-
+        self.natural_frequencies = np.abs(np.random.normal(0, 1, N))
+        self.fig, self.axs = plt.subplots(3, 1, figsize=(10, 15))
+        self.colorbar1 = None
+        self.colorbar2 = None
+        self.method = "cosine"
 
         # Define action and observation spaces
         self.action_space = spaces.Box(low=-0.1, high=0.1, shape=(N, N), dtype=np.float32)
@@ -49,11 +53,44 @@ class KuramotoEnv(embodied.Env):
         self.phase_history.append(self.theta)
     
     def compute_correllogram(self):
-        # Convert phase history to a numpy array for easier manipulation
+            if self.method == "circular":
+                return self.compute_circular_correlation_correllogram()
+            elif self.method == "cosine":
+                return self.compute_cosine_correllogram()
+            else:
+                raise ValueError("Invalid method. Choose 'circular' or 'cosine'.")
+
+    def compute_circular_correlation_correllogram(self):
+            phase_data = np.array(self.phase_history)
+            N_timesteps, N_oscillators = phase_data.shape
+
+            # Compute the mean resultant vector for each oscillator
+            R = np.mean(np.exp(1j * phase_data), axis=0)
+
+            correllogram = np.zeros((N_oscillators, N_oscillators))
+            for i in range(N_oscillators):
+                for j in range(N_oscillators):
+                    numerator = np.real(R[i] * np.conj(R[j]))
+                    denominator = np.abs(R[i]) * np.abs(R[j])
+                    correllogram[i, j] = numerator / denominator
+
+            correllogram = np.expand_dims(correllogram, axis=-1)  # Add a channel dimension
+            return correllogram
+
+    def compute_cosine_correllogram(self):
         phase_data = np.array(self.phase_history)
-        correllogram = np.corrcoef(phase_data, rowvar=False)  # Compute correlation matrix
+        N_timesteps, N_oscillators = phase_data.shape
+
+        # Computing pairwise phase differences
+        phase_diff = phase_data[:, :, None] - phase_data[:, None, :]
+        cos_phase_diff = np.cos(phase_diff)
+
+        # Averaging over time to obtain the cosine-based local order parameter
+        correllogram = np.mean(cos_phase_diff, axis=0)
+
         correllogram = np.expand_dims(correllogram, axis=-1)  # Add a channel dimension
         return correllogram
+
     
     def update_coupling_matrix(self, action):
         self.A += action
@@ -115,12 +152,22 @@ class KuramotoEnv(embodied.Env):
         return initial_correllogram
 
     def render_phases(self, ax):
-        ax.scatter(range(self.N), self.theta, c=self.theta, cmap='hsv', alpha=0.75)
-        ax.set_title('Phases of Oscillators')
-        ax.set_xlabel('Oscillator Index')
-        ax.set_ylabel('Phase (radians)')
-        ax.set_yticks([0, np.pi, 2 * np.pi])
-        ax.set_yticklabels(['0', 'π', '2π'])
+        # Convert phases to Cartesian coordinates
+        x = np.cos(self.theta)
+        y = np.sin(self.theta)
+
+        # Plot the circle representing unit magnitude
+        circle = plt.Circle((0, 0), 1, color='grey', fill=False)
+        ax.add_artist(circle)
+
+        # Plot the phases
+        ax.scatter(x, y, c=np.arange(len(self.theta)), cmap='hsv', alpha=0.75)
+        ax.set_title('Phases of Oscillators on a Circle')
+
+        # Ensure the plot is square and the circle is actually circular
+        ax.set_aspect('equal', 'box')
+        ax.set_xlim([-1.1, 1.1])
+        ax.set_ylim([-1.1, 1.1])
 
     def render_coupling_matrix(self, ax):
         im = ax.imshow(self.A, cmap='viridis', aspect='auto')
@@ -136,16 +183,23 @@ class KuramotoEnv(embodied.Env):
         ax.set_xlabel('Oscillator Index')
         ax.set_ylabel('Oscillator Index')
         return im  # Return the image object for colorbar
-
+    
     def render(self):
-        fig, axs = plt.subplots(3, 1, figsize=(10, 15))
-        self.render_phases(axs[0])
-        im1 = self.render_coupling_matrix(axs[1])
-        fig.colorbar(im1, ax=axs[1], orientation='vertical', fraction=0.046, pad=0.04)
-        im2 = self.render_correllogram(axs[2])
-        fig.colorbar(im2, ax=axs[2], orientation='vertical', fraction=0.046, pad=0.04)
+        # Clear the axes
+        for ax in self.axs:
+            ax.clear()
+
+        self.render_phases(self.axs[0])
+        im1 = self.render_coupling_matrix(self.axs[1])
+        if not self.colorbar1:
+            self.colorbar1 = self.fig.colorbar(im1, ax=self.axs[1], orientation='vertical', fraction=0.046, pad=0.04)
+        im2 = self.render_correllogram(self.axs[2])
+        if not self.colorbar2:
+            self.colorbar2 = self.fig.colorbar(im2, ax=self.axs[2], orientation='vertical', fraction=0.046, pad=0.04)
+
         plt.tight_layout()
-        plt.show()
+        plt.draw()  # Update the figure
+
 
     def close(self):
         pass
