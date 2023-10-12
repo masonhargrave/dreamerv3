@@ -45,7 +45,7 @@ RUN pip3 install --upgrade pip
 # Envs
 ENV MUJOCO_GL=osmesa
 COPY dreamerv3/embodied/scripts scripts
-RUN sh scripts/install-dmlab.sh
+# RUN sh scripts/install-dmlab.sh
 # RUN sh scripts/install-atari.sh
 # RUN sh scripts/install-minecraft.sh
 ENV NUMBA_CACHE_DIR=/tmp

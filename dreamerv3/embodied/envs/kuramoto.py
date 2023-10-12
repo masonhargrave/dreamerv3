@@ -39,7 +39,7 @@ class KuramotoEnv(embodied.Env):
         """
         # Define the derivative function for the Runge-Kutta method
         def derivative(theta):
-            return np.sum(self.A * np.sin(np.outer(theta, np.ones(self.N)) - np.outer(np.ones(self.N), theta)), axis=1)
+            return self.natural_frequencies + np.sum(self.A * np.sin(np.outer(theta, np.ones(self.N)) - np.outer(np.ones(self.N), theta)), axis=1)
         
         # 4th Order Runge-Kutta method to update phases
         dt = self.DT # Time step
@@ -91,13 +91,11 @@ class KuramotoEnv(embodied.Env):
         correllogram = np.expand_dims(correllogram, axis=-1)  # Add a channel dimension
         return correllogram
 
-    
     def update_coupling_matrix(self, action):
         self.A += action
         self.A = (self.A + self.A.T) / 2  # Ensure symmetry
         np.fill_diagonal(self.A, 0)  # No self-coupling
         self.A = np.clip(self.A, 0, 1)  # Clip the values of A to be within [0, 1]
-
 
     def step(self, action):
         """
@@ -163,7 +161,7 @@ class KuramotoEnv(embodied.Env):
         # Plot the phases
         ax.scatter(x, y, c=np.arange(len(self.theta)), cmap='hsv', alpha=0.75)
         ax.set_title('Phases of Oscillators on a Circle')
-
+        
         # Ensure the plot is square and the circle is actually circular
         ax.set_aspect('equal', 'box')
         ax.set_xlim([-1.1, 1.1])
@@ -199,7 +197,6 @@ class KuramotoEnv(embodied.Env):
 
         plt.tight_layout()
         plt.draw()  # Update the figure
-
 
     def close(self):
         pass
