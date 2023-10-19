@@ -25,6 +25,7 @@ def main():
       'logdir': f'~/logdir/run_{graphworld_args.N_ROOMS}_{graphworld_args.SEED}',
       'run.log_every': 30,  # Seconds
       'run.steps': 1e7,
+      'run.train_fill': 10000, # How much to prefill dataset
       'encoder.mlp_keys': 'vector',
       'decoder.mlp_keys': 'vector',
       'encoder.cnn_keys': '$^',

@@ -1,8 +1,8 @@
 import embodied
 import numpy as np
-import gym
 from gym import spaces
 import matplotlib.pyplot as plt
+from scipy.signal import convolve2d
 
 def random_symmetric_matrix(N, rng):
     """
@@ -13,13 +13,36 @@ def random_symmetric_matrix(N, rng):
     np.fill_diagonal(A, 0)  # No self-coupling
     return A
 
+def smooth_matrix(matrix, kernel_size=3, max_diff=0.1):
+    """
+    Smooths a matrix such that each element is close to its neighbors.
+    Uses convolution with a local averaging kernel and ensures symmetry.
+    """
+    # Create an averaging kernel
+    kernel = np.ones((kernel_size, kernel_size)) / (kernel_size ** 2)
+
+    # Convolve the input matrix with the kernel
+    smoothed = convolve2d(matrix, kernel, mode='same', boundary='symm')
+
+    # Ensure differences are within the max_diff threshold
+    diff = matrix - smoothed
+    diff = np.clip(diff, -max_diff, max_diff)
+    result = matrix - diff
+    
+    # Preserve symmetry
+    upper_triangle = np.triu(result)
+    result = upper_triangle + upper_triangle.T
+    np.fill_diagonal(result, 0.0)  # Ensure diagonal is zero
+    return result
+
 class KuramotoEnv(embodied.Env):
     DT = 0.01 # Time set for Runge-Kutta method
 
     def __init__(self, target_matrix=None, N=64, threshold=0.1, sim_steps_per_env_step=1000, max_steps=100, seed=None, fixed_start=False):
         np_random = np.random.default_rng(seed)
         if target_matrix is None:
-            target_matrix = random_symmetric_matrix(N, np_random)
+            raw_matrix = random_symmetric_matrix(N, np_random)
+            target_matrix = smooth_matrix(raw_matrix)
         assert target_matrix.shape == (N, N), "Target matrix must be square with dimensions matching N"
         self.N = N  # Number of oscillators
         self.target_matrix = target_matrix  # Target coupling matrix
@@ -39,7 +62,11 @@ class KuramotoEnv(embodied.Env):
         self.method = "cosine"
 
         # Define action and observation spaces
-        self.action_space = spaces.Box(low=-0.1, high=0.1, shape=(N, N), dtype=np.float32)
+        self.action_space = spaces.Box(
+            low=np.array([0, 0, 0, -0.1]),
+            high=np.array([1, 1, 1, 0.1]),
+            dtype=np.float32
+        )
         self.observation_space = spaces.Box(low=-1, high=1, shape=(N, N, 1), dtype=np.float32)
     
     def simulation_step(self):
@@ -88,7 +115,6 @@ class KuramotoEnv(embodied.Env):
 
     def compute_cosine_correllogram(self):
         phase_data = np.array(self.phase_history)
-        N_timesteps, N_oscillators = phase_data.shape
 
         # Computing pairwise phase differences
         phase_diff = phase_data[:, :, None] - phase_data[:, None, :]
@@ -99,12 +125,6 @@ class KuramotoEnv(embodied.Env):
 
         correllogram = np.expand_dims(correllogram, axis=-1)  # Add a channel dimension
         return correllogram
-    
-    def update_coupling_matrix(self, action):
-        self.A += action
-        self.A = (self.A + self.A.T) / 2  # Ensure symmetry
-        np.fill_diagonal(self.A, 0)  # No self-coupling
-        self.A = np.clip(self.A, 0, 1)  # Clip the values of A to be within [0, 1]
 
     def step(self, action):
         """
@@ -116,14 +136,33 @@ class KuramotoEnv(embodied.Env):
         Returns:
         tuple: A tuple containing the correllogram, reward, done flag, and an empty dictionary.
         """
+
+        # Initialize reward
+        reward = 0.0
         
         # Update step count
         self.current_step += 1
         if self.current_step >= self.max_steps: 
             self._done = True
 
-        # Apply action to the coupling matrix
-        self.update_coupling_matrix(action)
+        # Extracting components of the flattened action
+        x_rel, y_rel, block_size_rel, delta_conn = action
+
+        # Convert relative actions to absolute values
+        x = int(x_rel * self.N)
+        y = int(y_rel * self.N)
+        block_size = int(block_size_rel * self.N)
+
+        # Define the indices for the block
+        x_end = min(x + block_size, self.N)
+        y_end = min(y + block_size, self.N)
+
+        # Update the coupling matrix block
+        self.A[x:x_end, y:y_end] += delta_conn
+        self.A[y:y_end, x:x_end] += delta_conn  # Since the matrix is symmetric
+
+        # Ensure diagonal is zero
+        np.fill_diagonal(self.A, 0.0)
 
         self.phase_history = [] # Reset phase history
         
@@ -136,7 +175,7 @@ class KuramotoEnv(embodied.Env):
         
         # Compute reward based on closeness to the target matrix
         frobenius_norm = np.linalg.norm(self.A - self.target_matrix, 'fro')
-        reward = -frobenius_norm
+        reward -= frobenius_norm
         
         # Check termination condition
         if not self._done:
@@ -157,7 +196,7 @@ class KuramotoEnv(embodied.Env):
             self.A = random_symmetric_matrix(self.N, rng)
 
         self.phase_history = []  # Reset phase history
-        # Optionally, you might want to run a few simulation steps to get an initial correllogram
+        # Advance the simulation
         for _ in range(self.sim_steps_per_env_step):
             self.simulation_step()
         initial_correllogram = self.compute_correllogram()  # Compute initial correllogram

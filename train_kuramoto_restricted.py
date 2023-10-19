@@ -9,7 +9,7 @@ def main():
   config = embodied.Config(dreamerv3.configs['defaults'])
   config = config.update(dreamerv3.configs['medium'])
   config = config.update({
-      'logdir': '~/logdir/kuramoto5',
+      'logdir': '~/logdir/kuramoto_restricted_medium_1000_1',
       'run.log_every': 30,  # Seconds
       'encoder.mlp_keys': '^$',
       'decoder.mlp_keys': '^$',
@@ -26,7 +26,7 @@ def main():
       embodied.logger.TensorBoardOutput(logdir),
   ])
 
-  from embodied.envs import kuramoto
+  from embodied.envs import kuramoto_restricted as kuramoto
   from embodied.envs import from_gym
   env = kuramoto.KuramotoEnv(seed=1)  # Replace this with your Gym env.
   env = from_gym.FromGym(env, obs_key='correlogram') 
