@@ -22,12 +22,7 @@ def smooth_matrix(matrix, kernel_size=3, max_diff=0.1):
     kernel = np.ones((kernel_size, kernel_size)) / (kernel_size ** 2)
 
     # Convolve the input matrix with the kernel
-    smoothed = convolve2d(matrix, kernel, mode='same', boundary='symm')
-
-    # Ensure differences are within the max_diff threshold
-    diff = matrix - smoothed
-    diff = np.clip(diff, -max_diff, max_diff)
-    result = matrix - diff
+    result = convolve2d(matrix, kernel, mode='same', boundary='symm')
     
     # Preserve symmetry
     upper_triangle = np.triu(result)
