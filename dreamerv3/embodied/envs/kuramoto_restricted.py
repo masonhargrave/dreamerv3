@@ -62,6 +62,7 @@ class KuramotoEnv(embodied.Env):
         self.m_new = 0
         self.s_old = 0
         self.s_new = 0
+        self.closest_distance = np.inf
 
 
         # Define action and observation spaces
@@ -212,6 +213,13 @@ class KuramotoEnv(embodied.Env):
         # Check termination condition
         if not self._done:
             self._done = frobenius_norm < self.threshold
+        
+        # Check if the current matrix is closer to the target matrix than any previous matrix
+        if frobenius_norm < self.closest_distance:
+            self.closest_distance = frobenius_norm
+
+        if self._done:
+            print("Closest distance to target matrix: {}".format(self.closest_distance))
         
         return correllogram, normalized_reward, self._done, {}
 

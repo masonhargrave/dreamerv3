@@ -9,7 +9,7 @@ def main():
   config = embodied.Config(dreamerv3.configs['defaults'])
   config = config.update(dreamerv3.configs['medium'])
   config = config.update({
-      'logdir': '~/logdir/kuramoto_restricted_medium_1000_1',
+      'logdir': '~/logdir/kuramoto_restricted_medium_1000_3_fixed',
       'run.log_every': 30,  # Seconds
       'encoder.mlp_keys': '^$',
       'decoder.mlp_keys': '^$',
@@ -28,10 +28,10 @@ def main():
 
   from embodied.envs import kuramoto_restricted as kuramoto
   from embodied.envs import from_gym
-  env = kuramoto.KuramotoEnv(seed=1, fixed_start=False)  # Replace this with your Gym env.
+  env = kuramoto.KuramotoEnv(seed=3, fixed_start=True)  # Replace this with your Gym env.
   env = from_gym.FromGym(env, obs_key='correlogram') 
   env = dreamerv3.wrap_env(env, config)
-  env = embodied.BatchEnv([env], parallel=False)
+  env = embodied.BatchEnv([env], parallel=True)
 
   agent = dreamerv3.Agent(env.obs_space, env.act_space, step, config)
   replay = embodied.replay.Uniform(
