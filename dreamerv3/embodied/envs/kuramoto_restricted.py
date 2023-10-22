@@ -55,6 +55,14 @@ class KuramotoEnv(embodied.Env):
         self.colorbar1 = None
         self.colorbar2 = None
         self.method = "cosine"
+        self.sum_rewards = 0.0
+        self.num_steps = 1e-10
+        # Initialize Welford's online variance algorithm parameters
+        self.m_old = 0
+        self.m_new = 0
+        self.s_old = 0
+        self.s_new = 0
+
 
         # Define action and observation spaces
         self.action_space = spaces.Box(
@@ -171,12 +179,41 @@ class KuramotoEnv(embodied.Env):
         # Compute reward based on closeness to the target matrix
         frobenius_norm = np.linalg.norm(self.A - self.target_matrix, 'fro')
         reward -= frobenius_norm
+
+        # Before normalizing the reward, update the running statistics
+        self.sum_rewards += reward
+        self.num_steps += 1
+
+        mean_reward = self.sum_rewards / self.num_steps
+        
+        # Update statistics with Welford's method
+        if self.num_steps == 1:
+            self.m_old = self.m_new = reward
+            self.s_old = 0
+        else:
+            self.m_new = self.m_old + (reward - self.m_old) / self.num_steps
+            self.s_new = self.s_old + (reward - self.m_old) * (reward - self.m_new)
+            
+            # Set up for next iteration
+            self.m_old = self.m_new
+            self.s_old = self.s_new
+
+        mean_reward = self.m_new
+        if self.num_steps < 2:  # We can't compute variance with fewer than 2 samples
+            var_reward = 0
+        else:
+            var_reward = self.s_new / (self.num_steps - 1)
+        
+        std_reward = np.sqrt(var_reward + 1e-10)  # The small term ensures
+                
+        # Normalize the reward
+        normalized_reward = (reward - mean_reward) / std_reward
         
         # Check termination condition
         if not self._done:
             self._done = frobenius_norm < self.threshold
         
-        return correllogram, reward, self._done, {}
+        return correllogram, normalized_reward, self._done, {}
 
     def reset(self, seed=None):
         rng = np.random.default_rng(seed)

@@ -28,7 +28,7 @@ def main():
 
   from embodied.envs import kuramoto_restricted as kuramoto
   from embodied.envs import from_gym
-  env = kuramoto.KuramotoEnv(seed=1)  # Replace this with your Gym env.
+  env = kuramoto.KuramotoEnv(seed=1, fixed_start=False)  # Replace this with your Gym env.
   env = from_gym.FromGym(env, obs_key='correlogram') 
   env = dreamerv3.wrap_env(env, config)
   env = embodied.BatchEnv([env], parallel=False)
