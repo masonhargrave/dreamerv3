@@ -62,7 +62,7 @@ class KuramotoEnv(embodied.Env):
         # Define action and observation spaces
         self.action_space = spaces.Box(
             low=np.array([0, 0, 0, -0.1]),
-            high=np.array([1, 1, 1, 0.1]),
+            high=np.array([self.N, self.N, self.N, 0.1]),
             dtype=np.float32
         )
         self.observation_space = spaces.Box(low=-1, high=1, shape=(N, N, 1), dtype=np.float32)
@@ -143,36 +143,20 @@ class KuramotoEnv(embodied.Env):
         if self.current_step >= self.max_steps: 
             self._done = True
 
-        # Extracting components of the flattened action
-        x_rel, y_rel, block_size_rel, delta_conn = action
+        # Extracting components of the action
+        center_x, center_y, radius, delta_conn = action
 
-        # Convert relative actions to absolute values
-        x = int(x_rel * self.N)
-        y = int(y_rel * self.N)
-        block_size = int(block_size_rel * self.N)
+        # Create a mesh grid
+        X, Y = np.meshgrid(np.linspace(0, 1, self.N), np.linspace(0, 1, self.N))
 
-        # Define the indices for the block
-        x_end = min(x + block_size, self.N)
-        y_end = min(y + block_size, self.N)
+        # Compute the Gaussian function centered at center_x, center_y with standard deviation radius
+        gaussian = np.exp(-((X - center_x)**2 + (Y - center_y)**2) / (2 * radius**2))
 
-        # Check for boundary exceedance
-        if x + block_size > self.N:
-            print("Block exceeds boundary")
-            reward -= 30
-
-        # Update the coupling matrix block
-        self.A[x:x_end, y:y_end] += delta_conn
-        self.A[y:y_end, x:x_end] += delta_conn  # Since the matrix is symmetric
+        # Apply the Gaussian transformation to the matrix
+        self.A += gaussian * delta_conn
 
         # Ensure diagonal is zero
         np.fill_diagonal(self.A, 0.0)
-
-        print("x: {}, y: {}, block size: {}, delta_conn: {}".format(x, y, block_size, delta_conn))
-
-        # Check for single-element diagonal block actions
-        if block_size == 1 and x == y:
-            print("Single-element diagonal block action")
-            reward -= 30
 
         # Clip the coupling matrix to the range [0, 1]
         self.A = np.clip(self.A, 0.0, 1.0)
@@ -190,8 +174,6 @@ class KuramotoEnv(embodied.Env):
         frobenius_norm = np.linalg.norm(self.A - self.target_matrix, 'fro')
         reward -= frobenius_norm
 
-        print("Distance to target: {}".format(frobenius_norm))
-
         # Check termination condition
         if not self._done:
             self._done = frobenius_norm < self.threshold
@@ -204,6 +186,11 @@ class KuramotoEnv(embodied.Env):
 
         # Action magnitude penalty
         reward -= 1 * np.abs(delta_conn)
+
+        # Consolidate print information
+        step_info = "Step {}: x={:.8f}, y={:.8f}, radius={:.8f}, delta_conn={:.8f}, Dist2Target={:.8f}".format(
+            self.current_step, center_x, center_y, radius, delta_conn, frobenius_norm)
+        print(step_info)
 
         if self._done:
             print("Closest distance to target matrix: {}".format(self.closest_distance))
