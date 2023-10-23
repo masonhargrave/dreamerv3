@@ -55,13 +55,6 @@ class KuramotoEnv(embodied.Env):
         self.colorbar1 = None
         self.colorbar2 = None
         self.method = "cosine"
-        self.sum_rewards = 0.0
-        self.num_steps = 1e-10
-        # Initialize Welford's online variance algorithm parameters
-        self.m_old = 0
-        self.m_new = 0
-        self.s_old = 0
-        self.s_new = 0
         self.closest_distance = np.inf
 
 
@@ -161,12 +154,23 @@ class KuramotoEnv(embodied.Env):
         x_end = min(x + block_size, self.N)
         y_end = min(y + block_size, self.N)
 
+        # Check for boundary exceedance
+        if x + block_size > self.N:
+            reward -= 30
+
         # Update the coupling matrix block
         self.A[x:x_end, y:y_end] += delta_conn
         self.A[y:y_end, x:x_end] += delta_conn  # Since the matrix is symmetric
 
         # Ensure diagonal is zero
         np.fill_diagonal(self.A, 0.0)
+
+        # Check for single-element diagonal block actions
+        if block_size == 1 and x == y:
+            reward -= 30
+
+        # Clip the coupling matrix to the range [0, 1]
+        self.A = np.clip(self.A, 0.0, 1.0)
 
         self.phase_history = [] # Reset phase history
         
@@ -180,54 +184,32 @@ class KuramotoEnv(embodied.Env):
         # Compute reward based on closeness to the target matrix
         frobenius_norm = np.linalg.norm(self.A - self.target_matrix, 'fro')
         reward -= frobenius_norm
-
-        # Before normalizing the reward, update the running statistics
-        self.sum_rewards += reward
-        self.num_steps += 1
-
-        mean_reward = self.sum_rewards / self.num_steps
-        
-        # Update statistics with Welford's method
-        if self.num_steps == 1:
-            self.m_old = self.m_new = reward
-            self.s_old = 0
-        else:
-            self.m_new = self.m_old + (reward - self.m_old) / self.num_steps
-            self.s_new = self.s_old + (reward - self.m_old) * (reward - self.m_new)
-            
-            # Set up for next iteration
-            self.m_old = self.m_new
-            self.s_old = self.s_new
-
-        mean_reward = self.m_new
-        if self.num_steps < 2:  # We can't compute variance with fewer than 2 samples
-            var_reward = 0
-        else:
-            var_reward = self.s_new / (self.num_steps - 1)
-        
-        std_reward = np.sqrt(var_reward + 1e-10)  # The small term ensures
-                
-        # Normalize the reward
-        normalized_reward = (reward - mean_reward) / std_reward
         
         # Check termination condition
         if not self._done:
             self._done = frobenius_norm < self.threshold
         
         # Check if the current matrix is closer to the target matrix than any previous matrix
+        IMPROVEMENT_REWARD = 1.0
         if frobenius_norm < self.closest_distance:
+            reward += IMPROVEMENT_REWARD
             self.closest_distance = frobenius_norm
+
+        # Action magnitude penalty
+            action_magnitude = np.linalg.norm(action)
+            reward -= 1 * action_magnitude
 
         if self._done:
             print("Closest distance to target matrix: {}".format(self.closest_distance))
         
-        return correllogram, normalized_reward, self._done, {}
+        return correllogram, reward, self._done, {}
 
     def reset(self, seed=None):
         rng = np.random.default_rng(seed)
         self.theta = rng.uniform(0, 2 * np.pi, self.N)  # Reset phases
         self._done = False  # Reset done flag
         self.current_step = 0
+        self.closest_distance = np.inf
 
         # Initialize coupling matrix
         if self.fixed_A is not None:

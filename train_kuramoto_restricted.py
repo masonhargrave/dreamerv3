@@ -31,9 +31,14 @@ def main():
   env = kuramoto.KuramotoEnv(seed=3, fixed_start=True)  # Replace this with your Gym env.
   env = from_gym.FromGym(env, obs_key='correlogram') 
   env = dreamerv3.wrap_env(env, config)
-  env = embodied.BatchEnv([env], parallel=True)
+  env = embodied.BatchEnv([env], parallel=False)
 
-  agent = dreamerv3.Agent(env.obs_space, env.act_space, step, config)
+  random_agent = True
+  if random_agent:
+    agent = embodied.RandomAgent(env.act_space)
+  else:
+    agent = dreamerv3.Agent(env.obs_space, env.act_space, step, config)
+
   replay = embodied.replay.Uniform(
       config.batch_length, config.replay_size, logdir / 'replay')
   args = embodied.Config(
