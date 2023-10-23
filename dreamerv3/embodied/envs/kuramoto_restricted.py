@@ -13,7 +13,7 @@ def random_symmetric_matrix(N, rng):
     np.fill_diagonal(A, 0)  # No self-coupling
     return A
 
-def smooth_matrix(matrix, kernel_size=3, max_diff=0.1):
+def smooth_matrix(matrix, kernel_size=3):
     """
     Smooths a matrix such that each element is close to its neighbors.
     Uses convolution with a local averaging kernel and ensures symmetry.
@@ -56,6 +56,7 @@ class KuramotoEnv(embodied.Env):
         self.colorbar2 = None
         self.method = "cosine"
         self.closest_distance = np.inf
+        self.max_steps = max_steps
 
 
         # Define action and observation spaces
@@ -156,6 +157,7 @@ class KuramotoEnv(embodied.Env):
 
         # Check for boundary exceedance
         if x + block_size > self.N:
+            print("Block exceeds boundary")
             reward -= 30
 
         # Update the coupling matrix block
@@ -165,8 +167,11 @@ class KuramotoEnv(embodied.Env):
         # Ensure diagonal is zero
         np.fill_diagonal(self.A, 0.0)
 
+        print("x: {}, y: {}, block size: {}, delta_conn: {}".format(x, y, block_size, delta_conn))
+
         # Check for single-element diagonal block actions
         if block_size == 1 and x == y:
+            print("Single-element diagonal block action")
             reward -= 30
 
         # Clip the coupling matrix to the range [0, 1]
@@ -184,7 +189,9 @@ class KuramotoEnv(embodied.Env):
         # Compute reward based on closeness to the target matrix
         frobenius_norm = np.linalg.norm(self.A - self.target_matrix, 'fro')
         reward -= frobenius_norm
-        
+
+        print("Distance to target: {}".format(frobenius_norm))
+
         # Check termination condition
         if not self._done:
             self._done = frobenius_norm < self.threshold
@@ -196,13 +203,12 @@ class KuramotoEnv(embodied.Env):
             self.closest_distance = frobenius_norm
 
         # Action magnitude penalty
-            action_magnitude = np.linalg.norm(action)
-            reward -= 1 * action_magnitude
+        reward -= 1 * np.abs(delta_conn)
 
         if self._done:
             print("Closest distance to target matrix: {}".format(self.closest_distance))
         
-        return correllogram, reward, self._done, {}
+        return correllogram, reward / self.max_steps, self._done, {}
 
     def reset(self, seed=None):
         rng = np.random.default_rng(seed)
