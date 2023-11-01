@@ -76,6 +76,8 @@ class GraphWorld(gym.Env):
 
 
     def _combine(self, observation, action):
+        """Combine the observation and action into a single vector
+        action vector is one-hot encoded"""
         return np.concatenate([np.arange(self.n_rooms) == observation,
                np.arange(self.n_portals) == action], dtype=np.float32)
 

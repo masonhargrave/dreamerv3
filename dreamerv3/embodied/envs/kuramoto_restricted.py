@@ -57,11 +57,12 @@ class KuramotoEnv(embodied.Env):
         self.method = "cosine"
         self.closest_distance = np.inf
         self.max_steps = max_steps
+        self.previous_distance = 0
 
 
         # Define action and observation spaces
         self.action_space = spaces.Box(
-            low=np.array([0, 0, 0, -0.1]),
+            low=np.array([0, 0, 1, -0.1]),
             high=np.array([self.N, self.N, self.N, 0.1]),
             dtype=np.float32
         )
@@ -173,6 +174,8 @@ class KuramotoEnv(embodied.Env):
         # Compute reward based on closeness to the target matrix
         frobenius_norm = np.linalg.norm(self.A - self.target_matrix, 'fro')
         reward -= frobenius_norm
+        reward += (self.previous_distance - frobenius_norm) * 1
+        self.previous_distance = frobenius_norm
 
         # Check termination condition
         if not self._done:
